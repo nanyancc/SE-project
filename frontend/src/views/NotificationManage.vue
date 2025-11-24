@@ -1,126 +1,258 @@
 <template>
   <div class="page notification-page">
+    <!-- 顶部欢迎 / 提示 -->
     <el-card class="banner-card" shadow="never">
       <div class="banner-inner">
         <div class="banner-left">
           <div class="weather-icon">🔔</div>
           <div>
-            <div class="banner-title">通知管理</div>
-            <div class="banner-sub">创建、编辑毕业设计相关通知</div>
+            <div class="banner-title">课题申报通知管理</div>
+            <div class="banner-sub">
+              教科办可发布“初次申报 / 二次补申报”通知，设置时间范围并自动开启教师申报权限。
+            </div>
           </div>
         </div>
       </div>
     </el-card>
 
-    <el-row :gutter="20">
-      <el-col :span="16">
-        <el-card shadow="never" class="mb-16">
-          <el-form inline>
-            <el-form-item label="通知标题">
-              <el-input v-model="keyword" placeholder="请输入通知标题" />
+    <el-row :gutter="16" class="mt-16">
+      <!-- 左侧：通知编辑表单 -->
+      <el-col :span="10">
+        <el-card shadow="never">
+          <template #header>
+            <div class="card-header">
+              <span>{{ form.id ? '编辑课题申报通知' : '新建课题申报通知' }}</span>
+              <el-tag v-if="form.status" size="small" :type="statusTagType(form.status)">
+                {{ form.status }}
+              </el-tag>
+            </div>
+          </template>
+
+          <el-form
+            ref="formRef"
+            :model="form"
+            :rules="rules"
+            label-width="90px"
+            size="small"
+          >
+            <el-form-item label="通知标题" prop="title">
+              <el-input
+                v-model="form.title"
+                maxlength="50"
+                show-word-limit
+                placeholder="例如：2025 届毕业设计课题申报通知"
+              />
             </el-form-item>
-            <el-form-item label="通知状态">
-              <el-select v-model="status" placeholder="全部">
-                <el-option label="全部" value="" />
-                <el-option label="草稿" value="草稿" />
-                <el-option label="已发布" value="已发布" />
-                <el-option label="已结束" value="已结束" />
+
+            <el-form-item label="通知类型" prop="type">
+              <el-select v-model="form.type" placeholder="请选择">
+                <el-option label="初次申报" value="初次申报" />
+                <el-option label="二次补申报" value="二次补申报" />
               </el-select>
             </el-form-item>
+
+            <el-form-item label="面向专业" prop="majors">
+              <el-select
+                v-model="form.majors"
+                multiple
+                filterable
+                placeholder="请选择面向专业"
+              >
+                <el-option
+                  v-for="m in majorOptions"
+                  :key="m"
+                  :label="m"
+                  :value="m"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="接收教师" prop="teacherScope">
+              <el-input
+                v-model="form.teacherScope"
+                placeholder="例如：计算机学院全部指导教师 / 指定教师列表"
+              />
+            </el-form-item>
+
+            <el-form-item label="申报时间" required>
+              <el-date-picker
+                v-model="timeRange"
+                type="datetimerange"
+                value-format="YYYY-MM-DD HH:mm"
+                range-separator="至"
+                start-placeholder="开始时间"
+                end-placeholder="截止时间"
+              />
+            </el-form-item>
+
+            <el-form-item label="申报要求" prop="requirement">
+              <el-input
+                v-model="form.requirement"
+                type="textarea"
+                :rows="4"
+                placeholder="填写申报要求、材料说明等"
+              />
+            </el-form-item>
+
+            <el-form-item label="通知模板">
+              <el-select
+                v-model="selectedTemplate"
+                placeholder="选择模板快速填充"
+                clearable
+                @change="applyTemplate"
+              >
+                <el-option
+                  v-for="tpl in templates"
+                  :key="tpl.value"
+                  :label="tpl.label"
+                  :value="tpl.value"
+                />
+              </el-select>
+            </el-form-item>
+
+            <el-form-item label="自动提醒">
+              <el-switch
+                v-model="form.autoRemind"
+                active-text="开启"
+                inactive-text="关闭"
+              />
+            </el-form-item>
+
             <el-form-item>
-              <el-button type="primary">搜索</el-button>
-              <el-button>导出报表</el-button>
-              <el-button type="primary">创建通知</el-button>
+              <el-button type="primary" @click="handleSave('draft')">
+                保存草稿
+              </el-button>
+              <el-button type="success" @click="handleSave('publish')">
+                发布通知
+              </el-button>
+              <el-button @click="handleReset">重置</el-button>
             </el-form-item>
           </el-form>
         </el-card>
+      </el-col>
 
+      <!-- 右侧：历史通知列表 -->
+      <el-col :span="14">
         <el-card shadow="never">
           <template #header>
-            <span>通知列表</span>
+            <div class="card-header">
+              <span>历史通知列表</span>
+              <div>
+                <el-button size="small" @click="handleExport">
+                  导出列表
+                </el-button>
+              </div>
+            </div>
           </template>
 
+          <el-form inline size="small" class="search-form">
+            <el-form-item label="关键字">
+              <el-input
+                v-model="query.keyword"
+                placeholder="标题 / 要求说明"
+                clearable
+              />
+            </el-form-item>
+            <el-form-item label="类型">
+              <el-select
+                v-model="query.type"
+                placeholder="全部"
+                clearable
+                style="width: 120px"
+              >
+                <el-option label="初次申报" value="初次申报" />
+                <el-option label="二次补申报" value="二次补申报" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="状态">
+              <el-select
+                v-model="query.status"
+                placeholder="全部"
+                clearable
+                style="width: 120px"
+              >
+                <el-option label="草稿" value="草稿" />
+                <el-option label="已发布" value="已发布" />
+                <el-option label="已撤回" value="已撤回" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary">查询</el-button>
+              <el-button @click="resetQuery">清空</el-button>
+            </el-form-item>
+          </el-form>
+
           <el-table
-            :data="filteredList"
+            :data="filteredNotifications"
+            size="small"
+            border
+            style="margin-top: 8px"
             highlight-current-row
-            @current-change="onRowChange"
           >
-            <el-table-column prop="title" label="标题" min-width="220" />
-            <el-table-column prop="range" label="通知对象" width="120" />
+            <el-table-column prop="title" label="通知标题" min-width="220" />
+            <el-table-column prop="type" label="类型" width="90" />
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
-                <el-tag
-                  v-if="row.status === '已发布'"
-                  type="success"
-                  size="small"
-                >
-                  已发布
-                </el-tag>
-                <el-tag
-                  v-else-if="row.status === '草稿'"
-                  type="info"
-                  size="small"
-                >
-                  草稿
-                </el-tag>
-                <el-tag
-                  v-else
-                  type="warning"
-                  size="small"
-                >
-                  已结束
+                <el-tag :type="statusTagType(row.status)" size="small">
+                  {{ row.status }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="start" label="开始时间" width="120" />
-            <el-table-column prop="end" label="结束时间" width="120" />
-            <el-table-column label="完成率" width="120">
+            <el-table-column label="时间范围" min-width="200">
               <template #default="{ row }">
-                <el-progress :percentage="row.progress" :stroke-width="8" />
+                <div>{{ row.startTime }} ~</div>
+                <div>{{ row.endTime }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140">
-              <template #default>
-                <el-button type="primary" link>查看</el-button>
-                <el-button type="primary" link>编辑</el-button>
+            <el-table-column prop="majors" label="面向专业" min-width="160">
+              <template #default="{ row }">
+                <el-tag
+                  v-for="m in row.majors"
+                  :key="m"
+                  size="small"
+                  effect="plain"
+                  class="tag-item"
+                >
+                  {{ m }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="publisher" label="发布人" width="90" />
+            <el-table-column prop="publishTime" label="发布时间" width="150" />
+            <el-table-column prop="readRate" label="阅读率" width="90" />
+
+            <el-table-column label="操作" width="230" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  type="primary"
+                  link
+                  @click="editNotification(row)"
+                >
+                  编辑
+                </el-button>
+                <el-button type="primary" link @click="copyNotification(row)">
+                  复制
+                </el-button>
+                <el-button
+                  v-if="row.status === '草稿'"
+                  type="success"
+                  link
+                  @click="publishNotification(row)"
+                >
+                  发布
+                </el-button>
+                <el-button
+                  v-else-if="row.status === '已发布'"
+                  type="danger"
+                  link
+                  :disabled="isStarted(row)"
+                  @click="revokeNotification(row)"
+                >
+                  撤回
+                </el-button>
               </template>
             </el-table-column>
           </el-table>
-        </el-card>
-      </el-col>
-
-      <el-col :span="8">
-        <el-card shadow="never" class="detail-card">
-          <template #header>
-            <span>通知详情 / 审批进度</span>
-          </template>
-
-          <div v-if="current">
-            <p><strong>标题：</strong>{{ current.title }}</p>
-            <p><strong>发布范围：</strong>{{ current.range }}</p>
-            <p><strong>时间：</strong>{{ current.start }} ~ {{ current.end }}</p>
-            <p class="mt-16"><strong>内容摘要：</strong></p>
-            <p class="text-muted">
-              {{ current.content }}
-            </p>
-
-            <p class="mt-16"><strong>完成情况：</strong></p>
-            <el-progress :percentage="current.progress" />
-
-            <p class="mt-16"><strong>时间线：</strong></p>
-            <el-timeline>
-              <el-timeline-item
-                v-for="item in current.timeline"
-                :key="item.time"
-                :timestamp="item.time"
-              >
-                {{ item.text }}
-              </el-timeline-item>
-            </el-timeline>
-          </div>
-          <div v-else class="empty-tip">
-            请选择左侧一条通知查看详细信息
-          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -128,80 +260,296 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
-const keyword = ref('')
-const status = ref('')
+const formRef = ref()
 
-const notices = ref([
+// 下拉选项
+const majorOptions = [
+  '计算机科学与技术',
+  '软件工程',
+  '信息安全',
+  '人工智能',
+  '数据科学与大数据技术'
+]
+
+const templates = [
+  {
+    value: 'first',
+    label: '初次申报模板',
+    title: '2025 届毕业设计课题初次申报通知',
+    requirement:
+      '请各位指导教师根据教学计划和学生人数，合理申报毕业设计课题，确保课题难度适中、工作量合理。'
+  },
+  {
+    value: 'second',
+    label: '二次补申报模板',
+    title: '2025 届毕业设计课题二次补申报通知',
+    requirement:
+      '为满足学生选题需求，现开启毕业设计课题二次补申报，请有新增课题的教师按要求补充申报。'
+  }
+]
+
+// 表单默认值
+const emptyForm = () => ({
+  id: null,
+  title: '',
+  type: '初次申报',
+  majors: [],
+  teacherScope: '本学院全部指导教师',
+  startTime: '',
+  endTime: '',
+  requirement: '',
+  autoRemind: true,
+  status: '草稿'
+})
+
+const form = reactive(emptyForm())
+const timeRange = ref([]) // [start, end]
+const selectedTemplate = ref('')
+
+// 校验规则
+const rules = {
+  title: [{ required: true, message: '请输入通知标题', trigger: 'blur' }],
+  type: [{ required: true, message: '请选择通知类型', trigger: 'change' }],
+  majors: [
+    { required: true, message: '请选择面向专业', trigger: 'change' }
+  ],
+  teacherScope: [
+    { required: true, message: '请输入接收教师范围', trigger: 'blur' }
+  ],
+  requirement: [
+    { required: true, message: '请输入申报要求说明', trigger: 'blur' }
+  ]
+}
+
+// 历史通知假数据
+const notifications = ref([
   {
     id: 1,
-    title: '2025 届毕业设计选题通知',
-    range: '全部学生',
+    title: '2025 届毕业设计课题初次申报通知',
+    type: '初次申报',
+    majors: ['计算机科学与技术', '软件工程'],
+    teacherScope: '计算机学院全部指导教师',
+    startTime: '2025-03-01 08:00',
+    endTime: '2025-03-15 23:59',
+    requirement: '请在规定时间内完成课题申报，每位教师最多 8 个课题。',
+    autoRemind: true,
     status: '已发布',
-    start: '2025-03-15',
-    end: '2025-04-15',
-    progress: 95,
-    content: '关于 2025 届毕业设计选题的安排，请各位同学在规定时间内完成选题并提交志愿。',
-    timeline: [
-      { time: '2025-03-15', text: '通知已发布' },
-      { time: '2025-03-20', text: '超过 50% 学生完成选题' },
-      { time: '2025-04-10', text: '超过 90% 学生完成选题' }
-    ]
+    publisher: '教科办',
+    publishTime: '2025-02-25 09:00',
+    readRate: '96%'
   },
   {
     id: 2,
-    title: '中期检查安排',
-    range: '指导教师',
-    status: '已发布',
-    start: '2025-05-01',
-    end: '2025-05-15',
-    progress: 68,
-    content: '请各位指导教师在规定时间内完成所带学生的中期检查，并上传相关表格。',
-    timeline: [{ time: '2025-05-01', text: '通知已发布' }]
-  },
-  {
-    id: 3,
-    title: '毕业论文提交截止提醒',
-    range: '全部学生',
+    title: '2025 届毕业设计课题二次补申报通知',
+    type: '二次补申报',
+    majors: ['软件工程'],
+    teacherScope: '软件工程专业指导教师',
+    startTime: '2025-03-20 08:00',
+    endTime: '2025-03-25 23:59',
+    requirement: '仅补充少量课题，避免与已发布课题重复。',
+    autoRemind: false,
     status: '草稿',
-    start: '2025-06-01',
-    end: '2025-06-15',
-    progress: 0,
-    content: '草稿通知示例，尚未发布。',
-    timeline: []
+    publisher: '教科办',
+    publishTime: '',
+    readRate: '--'
   }
 ])
 
-const current = ref(null)
+// 查询条件
+const query = reactive({
+  keyword: '',
+  type: '',
+  status: ''
+})
 
-const filteredList = computed(() =>
-  notices.value.filter(n => {
-    const k = keyword.value.trim()
-    return (
-      (!k || n.title.includes(k)) &&
-      (!status.value || n.status === status.value)
-    )
+const filteredNotifications = computed(() => {
+  return notifications.value.filter(n => {
+    const kw = query.keyword.trim()
+    const okKw =
+      !kw ||
+      n.title.includes(kw) ||
+      (n.requirement && n.requirement.includes(kw))
+    const okType = !query.type || n.type === query.type
+    const okStatus = !query.status || n.status === query.status
+    return okKw && okType && okStatus
   })
-)
+})
 
-const onRowChange = row => {
-  current.value = row
+// 状态对应 tag 颜色
+const statusTagType = status => {
+  if (status === '已发布') return 'success'
+  if (status === '已撤回') return 'info'
+  return 'warning' // 草稿
+}
+
+// 是否已经到开始时间（已开始则不能撤回）
+const isStarted = row => {
+  if (!row.startTime) return false
+  const now = new Date()
+  return now >= new Date(row.startTime.replace(/-/g, '/'))
+}
+
+// 应用模板
+const applyTemplate = val => {
+  const tpl = templates.find(t => t.value === val)
+  if (!tpl) return
+  form.title = tpl.title
+  form.requirement = tpl.requirement
+}
+
+// 保存或发布（mode: draft/publish）
+const handleSave = async mode => {
+  await formRef.value.validate().catch(() => {
+    ElMessage.error('请先填写完整的通知信息')
+    return Promise.reject()
+  })
+
+  if (!timeRange.value || timeRange.value.length !== 2) {
+    ElMessage.error('请选择申报开始时间和截止时间')
+    return
+  }
+
+  form.startTime = timeRange.value[0]
+  form.endTime = timeRange.value[1]
+
+  if (new Date(form.endTime) <= new Date(form.startTime)) {
+    ElMessage.error('申报截止时间必须晚于开始时间')
+    return
+  }
+
+  // 如果是发布，需要检查同一时间段不能存在多个已发布的同类型通知
+  if (mode === 'publish') {
+    const overlap = notifications.value.some(n => {
+      if (n.id === form.id) return false
+      if (n.type !== form.type) return false
+      if (n.status !== '已发布') return false
+      const startA = new Date(n.startTime.replace(/-/g, '/'))
+      const endA = new Date(n.endTime.replace(/-/g, '/'))
+      const startB = new Date(form.startTime.replace(/-/g, '/'))
+      const endB = new Date(form.endTime.replace(/-/g, '/'))
+      return startA <= endB && startB <= endA
+    })
+    if (overlap) {
+      ElMessage.error('同一时间段内不能存在多个有效的同类型通知')
+      return
+    }
+  }
+
+  const status = mode === 'publish' ? '已发布' : '草稿'
+  const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ')
+
+  if (!form.id) {
+    const id = Date.now()
+    notifications.value.unshift({
+      ...form,
+      id,
+      status,
+      publisher: '教科办',
+      publishTime: mode === 'publish' ? nowStr : '',
+      readRate: mode === 'publish' ? '0%' : '--'
+    })
+    form.id = id
+  } else {
+    const idx = notifications.value.findIndex(n => n.id === form.id)
+    if (idx !== -1) {
+      notifications.value[idx] = {
+        ...notifications.value[idx],
+        ...form,
+        status,
+        publishTime:
+          mode === 'publish'
+            ? notifications.value[idx].publishTime || nowStr
+            : notifications.value[idx].publishTime
+      }
+    }
+  }
+
+  ElMessage.success(mode === 'publish' ? '通知已成功发布' : '草稿已保存')
+}
+
+// 重置为新建
+const handleReset = () => {
+  Object.assign(form, emptyForm())
+  timeRange.value = []
+  selectedTemplate.value = ''
+}
+
+// 编辑
+const editNotification = row => {
+  Object.assign(form, row)
+  timeRange.value = [row.startTime, row.endTime]
+}
+
+// 复制
+const copyNotification = row => {
+  handleReset()
+  Object.assign(form, {
+    ...row,
+    id: null,
+    title: row.title + '（复制）',
+    status: '草稿'
+  })
+  timeRange.value = [row.startTime, row.endTime]
+}
+
+// 单行发布
+const publishNotification = row => {
+  ElMessageBox.confirm('确定要发布该通知吗？', '提示', {
+    type: 'warning'
+  })
+    .then(() => {
+      row.status = '已发布'
+      row.publishTime =
+        row.publishTime ||
+        new Date().toISOString().slice(0, 16).replace('T', ' ')
+      ElMessage.success('通知已成功发布')
+    })
+    .catch(() => {})
+}
+
+// 撤回
+const revokeNotification = row => {
+  if (isStarted(row)) {
+    ElMessage.error('申报已开始，不能撤回该通知')
+    return
+  }
+  ElMessageBox.confirm('确定要撤回该通知吗？', '提示', { type: 'warning' })
+    .then(() => {
+      row.status = '已撤回'
+      ElMessage.success('通知已撤回')
+    })
+    .catch(() => {})
+}
+
+// 导出（前端示例）
+const handleExport = () => {
+  ElMessage.info('前端示例：这里可以对接导出 Excel/PDF 接口')
+}
+
+// 查询区
+const resetQuery = () => {
+  query.keyword = ''
+  query.type = ''
+  query.status = ''
 }
 </script>
 
 <style scoped>
-.mb-16 {
-  margin-bottom: 16px;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.detail-card {
-  min-height: 260px;
+.search-form {
+  margin-bottom: 4px;
 }
 
-.empty-tip {
-  text-align: center;
-  color: #909399;
-  padding: 40px 0;
+.tag-item {
+  margin-right: 4px;
+  margin-bottom: 2px;
 }
 </style>
