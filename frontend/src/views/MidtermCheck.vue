@@ -41,7 +41,7 @@
 
         <el-card shadow="never">
           <template #header>
-            <span>上传中期检查表</span>
+            <span>填写中期检查</span>
           </template>
 
           <p class="mb-16">
@@ -49,22 +49,58 @@
             <strong>{{ currentStudent ? currentStudent.name : '未选择' }}</strong>
           </p>
 
-          <el-upload
-            drag
-            action="#"
-            :auto-upload="false"
-            class="upload-area"
-          >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="el-upload__text">
-              只能上传 jpg / png 文件，且不超过 500kb（示例）
-            </div>
-          </el-upload>
-
-          <div class="mt-16">
-            <el-button type="primary">提交</el-button>
-            <el-button>保存</el-button>
-          </div>
+          <el-form :model="form" label-width="120px" label-position="left">
+            <el-form-item label="已完成内容">
+              <el-input
+                v-model="form.completedContent"
+                type="textarea"
+                :rows="3"
+                placeholder="填写当前已完成工作"
+              />
+            </el-form-item>
+            <el-form-item label="遇到的问题">
+              <el-input
+                v-model="form.problems"
+                type="textarea"
+                :rows="2"
+                placeholder="列出主要问题"
+              />
+            </el-form-item>
+            <el-form-item label="下一步计划">
+              <el-input
+                v-model="form.nextPlan"
+                type="textarea"
+                :rows="2"
+                placeholder="后续计划安排"
+              />
+            </el-form-item>
+            <el-form-item label="进度评估">
+              <el-select v-model="form.progressStatus" style="width: 200px">
+                <el-option label="正常" value="正常" />
+                <el-option label="滞后" value="滞后" />
+                <el-option label="严重滞后" value="严重滞后" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="导师反馈">
+              <el-input
+                v-model="form.teacherFeedback"
+                type="textarea"
+                :rows="2"
+                placeholder="教师建议"
+              />
+            </el-form-item>
+            <el-form-item label="检查结果">
+              <el-select v-model="form.checkResult" style="width: 200px">
+                <el-option label="通过" value="通过" />
+                <el-option label="整改" value="整改" />
+              </el-select>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="saving" @click="saveMidterm">
+                保存
+              </el-button>
+            </el-form-item>
+          </el-form>
         </el-card>
       </el-col>
 
@@ -83,20 +119,80 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getMidterm, upsertMidterm } from '../api/midterm'
 
 const students = ref([
-  { id: '1000', name: '张三', topicName: '课题 1', status: '已提交' },
-  { id: '1001', name: '李四', topicName: '课题 2', status: '已保存' },
-  { id: '1002', name: '王五', topicName: '课题 3', status: '未提交' },
-  { id: '1003', name: '赵六', topicName: '课题 4', status: '未提交' }
+  { id: '1', name: '测试学生', topicName: '课题 1', status: '已提交' }
 ])
 
 const currentStudent = ref(null)
+const saving = ref(false)
+const form = reactive({
+  id: null,
+  completedContent: '',
+  problems: '',
+  nextPlan: '',
+  progressStatus: '正常',
+  teacherFeedback: '',
+  checkResult: ''
+})
 
-const selectStudent = row => {
+const resetForm = () => {
+  form.id = null
+  form.completedContent = ''
+  form.problems = ''
+  form.nextPlan = ''
+  form.progressStatus = '正常'
+  form.teacherFeedback = ''
+  form.checkResult = ''
+}
+
+const selectStudent = async row => {
   currentStudent.value = row
+  resetForm()
+  try {
+    const res = await getMidterm(Number(row.id))
+    if (res) {
+      form.id = res.id
+      form.completedContent = res.completedContent || ''
+      form.problems = res.problems || ''
+      form.nextPlan = res.nextPlan || ''
+      form.progressStatus = res.progressStatus || '正常'
+      form.teacherFeedback = res.teacherFeedback || ''
+      form.checkResult = res.checkResult || ''
+    }
+  } catch (err) {
+    console.warn('未找到记录，创建新表单')
+  }
+}
+
+const saveMidterm = async () => {
+  if (!currentStudent.value) {
+    ElMessage.warning('请先选择学生')
+    return
+  }
+  saving.value = true
+  try {
+    const payload = {
+      studentId: Number(currentStudent.value.id),
+      completedContent: form.completedContent,
+      problems: form.problems,
+      nextPlan: form.nextPlan,
+      progressStatus: form.progressStatus,
+      teacherFeedback: form.teacherFeedback,
+      checkResult: form.checkResult
+    }
+    const res = await upsertMidterm(payload)
+    form.id = res.id
+    ElMessage.success('保存成功')
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    saving.value = false
+  }
 }
 </script>
 

@@ -63,9 +63,10 @@
         <el-form-item label="审核状态">
           <el-select v-model="status" placeholder="all">
             <el-option label="全部" value="" />
-            <el-option label="已通过" value="已通过" />
             <el-option label="待审核" value="待审核" />
-            <el-option label="未通过" value="未通过" />
+            <el-option label="修改" value="修改" />
+            <el-option label="通过" value="通过" />
+            <el-option label="拒绝" value="拒绝" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -113,9 +114,12 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { listTopics } from '../api/topics'
 
 const teacher = {
+  id: 1,
   name: '张教授',
   college: '计算机学院',
   title: '教授',
@@ -128,49 +132,29 @@ const teacher = {
 const keyword = ref('')
 const type = ref('')
 const status = ref('')
+const topics = ref([])
 
-const topics = ref([
-  {
-    id: 1,
-    name: '基于深度学习的图像识别算法研究',
-    type: '研究型',
-    studentNum: '1人',
-    status: '已通过',
-    createdAt: '2025-05-01'
-  },
-  {
-    id: 2,
-    name: '智能校园导航系统设计与实现',
-    type: '应用型',
-    studentNum: '2人',
-    status: '已通过',
-    createdAt: '2025-05-03'
-  },
-  {
-    id: 3,
-    name: '在线教育平台前端界面设计',
-    type: '设计型',
-    studentNum: '2人',
-    status: '待审核',
-    createdAt: '2025-05-05'
-  },
-  {
-    id: 4,
-    name: '基于大数据的学生成绩分析系统',
-    type: '研究型',
-    studentNum: '3人',
-    status: '待审核',
-    createdAt: '2025-05-10'
-  },
-  {
-    id: 5,
-    name: '智能考勤整体 APP 开发',
-    type: '应用型',
-    studentNum: '2人',
-    status: '未通过',
-    createdAt: '2025-05-15'
+const fetchTopics = async () => {
+  try {
+    const { items } = await listTopics({
+      keyword: keyword.value,
+      type: type.value,
+      status: status.value,
+      teacherId: teacher.id
+    })
+    topics.value = items.map(t => ({
+      id: t.id,
+      name: t.name,
+      type: t.type,
+      studentNum: `${t.maxStudents || 1}人`,
+      status: t.auditStatus || '待审核',
+      createdAt: t.createdAt
+    }))
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('获取课题列表失败')
   }
-])
+}
 
 const filteredList = computed(() =>
   topics.value.filter(t => {
@@ -182,6 +166,10 @@ const filteredList = computed(() =>
     )
   })
 )
+
+onMounted(() => {
+  fetchTopics()
+})
 </script>
 
 <style scoped>

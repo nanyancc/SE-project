@@ -5,8 +5,10 @@
         <div class="banner-left">
           <div class="weather-icon">🌤</div>
           <div>
-            <div class="banner-title">张三同学 您好！祝您开题顺利</div>
-            <div class="banner-sub">登录时间：2025-05-20 AM 09:30:22</div>
+            <div class="banner-title">
+              {{ studentInfo.name }}，祝你开题顺利！
+            </div>
+            <div class="banner-sub">学号：{{ studentInfo.id }} | 课题ID：{{ studentInfo.topicId }}</div>
           </div>
         </div>
       </div>
@@ -15,41 +17,68 @@
     <el-row :gutter="20">
       <!-- 左侧开题信息 + 报告上传 -->
       <el-col :span="16">
-        <el-card shadow="never" class="mb-16">
-          <template #header>
-            <span>选题名称：基于 WEB 的高校后勤车辆管理系统</span>
-          </template>
-          <p><strong>研究内容：</strong></p>
-          <p>1）车辆管理：对校园内所有车辆的基本信息进行管理；</p>
-          <p>2）预约管理：对预约车辆进行审批管理；</p>
-          <p>3）系统管理：提供用户角色管理、日志查询等功能。</p>
-
-          <div class="btn-group">
-            <el-button type="primary">提交</el-button>
-            <el-button>编辑</el-button>
-            <el-button type="warning">申请审批</el-button>
-          </div>
-        </el-card>
-
         <el-card shadow="never">
           <template #header>
             <span>开题报告</span>
           </template>
-          <el-upload
-            drag
-            action="#"
-            :auto-upload="false"
-            multiple
-            class="upload-area"
-          >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="el-upload__text">
-              将文件拖到此处，或 <em>点击上传</em>
-            </div>
-            <template #tip>
-              <div class="el-upload__tip">支持 dotx / pdf 文件，前端示例不真正上传</div>
-            </template>
-          </el-upload>
+          <el-form :model="report" label-width="100px" label-position="left">
+            <el-form-item label="研究背景">
+              <el-input
+                v-model="report.background"
+                type="textarea"
+                :rows="3"
+                placeholder="填写研究背景/动机"
+              />
+            </el-form-item>
+            <el-form-item label="研究目标">
+              <el-input
+                v-model="report.target"
+                type="textarea"
+                :rows="2"
+                placeholder="目标与预期成果"
+              />
+            </el-form-item>
+            <el-form-item label="研究方法">
+              <el-input
+                v-model="report.method"
+                type="textarea"
+                :rows="3"
+                placeholder="拟采用的方法、工具、技术路线"
+              />
+            </el-form-item>
+            <el-form-item label="时间计划">
+              <el-input
+                v-model="report.plan"
+                type="textarea"
+                :rows="3"
+                placeholder="阶段计划与里程碑"
+              />
+            </el-form-item>
+            <el-form-item label="导师意见">
+              <el-input
+                v-model="report.teacherComment"
+                type="textarea"
+                :rows="2"
+                placeholder="审批/意见"
+              />
+            </el-form-item>
+            <el-form-item label="报告状态">
+              <el-tag :type="statusTag(report.reportStatus)" size="small">
+                {{ report.reportStatus }}
+              </el-tag>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="saving" @click="saveReport('待审核')">
+                保存
+              </el-button>
+              <el-button type="success" :loading="saving" @click="saveReport('已通过')">
+                标记通过
+              </el-button>
+              <el-button type="warning" :loading="saving" @click="saveReport('需修改')">
+                退回修改
+              </el-button>
+            </el-form-item>
+          </el-form>
         </el-card>
       </el-col>
 
@@ -76,48 +105,105 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { UploadFilled } from '@element-plus/icons-vue'
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import {
+  createOpeningReport,
+  getOpeningReport,
+  updateOpeningReport
+} from '../api/opening'
 
-const history = ref([
-  {
-    time: '2025-04-16',
-    title: '开题申请模板下载',
-    remark: '教务处发布'
-  },
-  {
-    time: '2025-04-20',
-    title: '开题申请需要修改',
-    remark: '指导老师：内容需补充系统架构设计'
-  },
-  {
-    time: '2025-04-29',
-    title: '开题申请审批通过',
-    remark: '系主任审批通过'
-  },
-  {
-    time: '2019-04-16',
-    title: '置顶：开题截止时间为 xxxx.xx.xx 23:59',
-    remark: '教务公告'
+const studentInfo = {
+  id: 1,
+  name: '测试学生',
+  topicId: 2001
+}
+
+const report = ref({
+  id: null,
+  studentId: studentInfo.id,
+  topicId: studentInfo.topicId,
+  background: '',
+  target: '',
+  method: '',
+  plan: '',
+  reportStatus: '待审核',
+  teacherComment: ''
+})
+
+const history = ref([])
+const saving = ref(false)
+
+const statusTag = status => {
+  if (status === '已通过') return 'success'
+  if (status === '需修改') return 'warning'
+  return 'info'
+}
+
+const buildHistory = data => {
+  const items = []
+  if (data.submitTime) {
+    items.push({
+      time: data.submitTime?.slice(0, 10),
+      title: '提交开题报告',
+      remark: '学生提交'
+    })
   }
-])
+  if (data.auditTime) {
+    items.push({
+      time: data.auditTime?.slice(0, 10),
+      title: '导师审核',
+      remark: data.teacherComment || '导师反馈'
+    })
+  }
+  history.value = items
+}
+
+const fetchReport = async () => {
+  try {
+    const data = await getOpeningReport(studentInfo.id)
+    if (data) {
+      report.value = {
+        ...report.value,
+        ...data,
+        studentId: data.studentId,
+        topicId: data.topicId
+      }
+      buildHistory(data)
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+const saveReport = async status => {
+  saving.value = true
+  try {
+    const payload = { ...report.value, reportStatus: status }
+    let saved
+    if (report.value.id) {
+      saved = await updateOpeningReport(report.value.id, payload)
+    } else {
+      saved = await createOpeningReport(payload)
+    }
+    report.value = { ...report.value, ...saved }
+    buildHistory(saved)
+    ElMessage.success('保存成功')
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(() => {
+  fetchReport()
+})
 </script>
 
 <style scoped>
 .mb-16 {
   margin-bottom: 16px;
-}
-
-.btn-group {
-  margin-top: 16px;
-}
-
-.upload-area {
-  width: 100%;
-}
-
-.upload-icon {
-  font-size: 40px;
-  margin-bottom: 10px;
 }
 </style>

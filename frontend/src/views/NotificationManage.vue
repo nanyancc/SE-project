@@ -119,10 +119,10 @@
             </el-form-item>
 
             <el-form-item>
-              <el-button type="primary" @click="handleSave('draft')">
+              <el-button type="primary" :loading="saving" @click="handleSave('draft')">
                 保存草稿
               </el-button>
-              <el-button type="success" @click="handleSave('publish')">
+              <el-button type="success" :loading="saving" @click="handleSave('publish')">
                 发布通知
               </el-button>
               <el-button @click="handleReset">重置</el-button>
@@ -177,7 +177,7 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary">查询</el-button>
+              <el-button type="primary" @click="fetchNotifications">查询</el-button>
               <el-button @click="resetQuery">清空</el-button>
             </el-form-item>
           </el-form>
@@ -237,7 +237,7 @@
                   v-if="row.status === '草稿'"
                   type="success"
                   link
-                  @click="publishNotification(row)"
+                  @click="publishNotificationRow(row)"
                 >
                   发布
                 </el-button>
@@ -246,7 +246,7 @@
                   type="danger"
                   link
                   :disabled="isStarted(row)"
-                  @click="revokeNotification(row)"
+                  @click="revokeNotificationRow(row)"
                 >
                   撤回
                 </el-button>
@@ -260,10 +260,18 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  listNotices,
+  publishNotice,
+  revokeNotice,
+  saveNotice
+} from '../api/notices'
 
 const formRef = ref()
+const loading = ref(false)
+const saving = ref(false)
 
 // 下拉选项
 const majorOptions = [
@@ -302,7 +310,8 @@ const emptyForm = () => ({
   endTime: '',
   requirement: '',
   autoRemind: true,
-  status: '草稿'
+  status: '草稿',
+  publisher: '教科办'
 })
 
 const form = reactive(emptyForm())
@@ -324,39 +333,7 @@ const rules = {
   ]
 }
 
-// 历史通知假数据
-const notifications = ref([
-  {
-    id: 1,
-    title: '2025 届毕业设计课题初次申报通知',
-    type: '初次申报',
-    majors: ['计算机科学与技术', '软件工程'],
-    teacherScope: '计算机学院全部指导教师',
-    startTime: '2025-03-01 08:00',
-    endTime: '2025-03-15 23:59',
-    requirement: '请在规定时间内完成课题申报，每位教师最多 8 个课题。',
-    autoRemind: true,
-    status: '已发布',
-    publisher: '教科办',
-    publishTime: '2025-02-25 09:00',
-    readRate: '96%'
-  },
-  {
-    id: 2,
-    title: '2025 届毕业设计课题二次补申报通知',
-    type: '二次补申报',
-    majors: ['软件工程'],
-    teacherScope: '软件工程专业指导教师',
-    startTime: '2025-03-20 08:00',
-    endTime: '2025-03-25 23:59',
-    requirement: '仅补充少量课题，避免与已发布课题重复。',
-    autoRemind: false,
-    status: '草稿',
-    publisher: '教科办',
-    publishTime: '',
-    readRate: '--'
-  }
-])
+const notifications = ref([])
 
 // 查询条件
 const query = reactive({
@@ -385,6 +362,16 @@ const statusTagType = status => {
   return 'warning' // 草稿
 }
 
+const fmt = val => {
+  if (!val) return ''
+  const d = new Date(val)
+  if (Number.isNaN(d.getTime())) return val
+  const pad = n => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`
+}
+
 // 是否已经到开始时间（已开始则不能撤回）
 const isStarted = row => {
   if (!row.startTime) return false
@@ -400,6 +387,36 @@ const applyTemplate = val => {
   form.requirement = tpl.requirement
 }
 
+const syncFormTime = () => {
+  if (timeRange.value?.length === 2) {
+    form.startTime = timeRange.value[0]
+    form.endTime = timeRange.value[1]
+  }
+}
+
+const fetchNotifications = async () => {
+  loading.value = true
+  try {
+    const list = await listNotices({
+      keyword: query.keyword,
+      type: query.type,
+      status: query.status
+    })
+    notifications.value = list.map(item => ({
+      ...item,
+      startTime: fmt(item.startTime),
+      endTime: fmt(item.endTime),
+      publishTime: fmt(item.publishTime),
+      readRate: item.status === '已发布' ? item.readRate || '0%' : '--'
+    }))
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('获取通知列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 // 保存或发布（mode: draft/publish）
 const handleSave = async mode => {
   await formRef.value.validate().catch(() => {
@@ -412,8 +429,7 @@ const handleSave = async mode => {
     return
   }
 
-  form.startTime = timeRange.value[0]
-  form.endTime = timeRange.value[1]
+  syncFormTime()
 
   if (new Date(form.endTime) <= new Date(form.startTime)) {
     ElMessage.error('申报截止时间必须晚于开始时间')
@@ -438,36 +454,19 @@ const handleSave = async mode => {
     }
   }
 
-  const status = mode === 'publish' ? '已发布' : '草稿'
-  const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ')
-
-  if (!form.id) {
-    const id = Date.now()
-    notifications.value.unshift({
-      ...form,
-      id,
-      status,
-      publisher: '教科办',
-      publishTime: mode === 'publish' ? nowStr : '',
-      readRate: mode === 'publish' ? '0%' : '--'
-    })
-    form.id = id
-  } else {
-    const idx = notifications.value.findIndex(n => n.id === form.id)
-    if (idx !== -1) {
-      notifications.value[idx] = {
-        ...notifications.value[idx],
-        ...form,
-        status,
-        publishTime:
-          mode === 'publish'
-            ? notifications.value[idx].publishTime || nowStr
-            : notifications.value[idx].publishTime
-      }
-    }
+  saving.value = true
+  try {
+    const status = mode === 'publish' ? '已发布' : '草稿'
+    const saved = await saveNotice({ ...form, status })
+    Object.assign(form, saved)
+    await fetchNotifications()
+    ElMessage.success(mode === 'publish' ? '通知已成功发布' : '草稿已保存')
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('保存失败，请重试')
+  } finally {
+    saving.value = false
   }
-
-  ElMessage.success(mode === 'publish' ? '通知已成功发布' : '草稿已保存')
 }
 
 // 重置为新建
@@ -496,29 +495,28 @@ const copyNotification = row => {
 }
 
 // 单行发布
-const publishNotification = row => {
+const publishNotificationRow = row => {
   ElMessageBox.confirm('确定要发布该通知吗？', '提示', {
     type: 'warning'
   })
-    .then(() => {
-      row.status = '已发布'
-      row.publishTime =
-        row.publishTime ||
-        new Date().toISOString().slice(0, 16).replace('T', ' ')
+    .then(async () => {
+      await publishNotice(row.id)
+      await fetchNotifications()
       ElMessage.success('通知已成功发布')
     })
     .catch(() => {})
 }
 
 // 撤回
-const revokeNotification = row => {
+const revokeNotificationRow = row => {
   if (isStarted(row)) {
     ElMessage.error('申报已开始，不能撤回该通知')
     return
   }
   ElMessageBox.confirm('确定要撤回该通知吗？', '提示', { type: 'warning' })
-    .then(() => {
-      row.status = '已撤回'
+    .then(async () => {
+      await revokeNotice(row.id)
+      await fetchNotifications()
       ElMessage.success('通知已撤回')
     })
     .catch(() => {})
@@ -534,7 +532,12 @@ const resetQuery = () => {
   query.keyword = ''
   query.type = ''
   query.status = ''
+  fetchNotifications()
 }
+
+onMounted(() => {
+  fetchNotifications()
+})
 </script>
 
 <style scoped>
