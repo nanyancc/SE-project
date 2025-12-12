@@ -1,34 +1,25 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Numeric, String, Text, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import DateTime, Integer, Numeric, String, Text, func, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class GraduationScore(Base):
-    __tablename__ = "GRADUATION_SCORE"
+class SysUser(Base):
+    # 对应 SQL: 0. 基础用户表 (SYS_USER)
+    __tablename__ = "SYS_USER"
 
-    id: Mapped[int] = mapped_column("SCORE_ID", Integer, primary_key=True, index=True)
-    student_id: Mapped[int] = mapped_column(
-        "STUDENT_ID", Integer, nullable=False, unique=True, index=True
-    )
-    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, nullable=False, index=True)
-    process_score: Mapped[float | None] = mapped_column("PROCESS_SCORE", Numeric(5, 2))
-    opening_score: Mapped[float | None] = mapped_column("OPENING_SCORE", Numeric(5, 2))
-    midterm_score: Mapped[float | None] = mapped_column("MIDTERM_SCORE", Numeric(5, 2))
-    thesis_score: Mapped[float | None] = mapped_column("THESIS_SCORE", Numeric(5, 2))
-    defense_score: Mapped[float | None] = mapped_column("DEFENSE_SCORE", Numeric(5, 2))
-    total_score: Mapped[float | None] = mapped_column("TOTAL_SCORE", Numeric(5, 2))
-    score_level: Mapped[str | None] = mapped_column("SCORE_LEVEL", String(2))
-    is_published: Mapped[int] = mapped_column(
-        "IS_PUBLISHED", Integer, nullable=False, default=0, server_default="0"
-    )
+    id: Mapped[int] = mapped_column("USER_ID", Integer, primary_key=True, autoincrement=True)
+    user_code: Mapped[str] = mapped_column("USER_CODE", String(50), unique=True, nullable=False)
+    user_name: Mapped[str] = mapped_column("USER_NAME", String(100), nullable=False)
+    user_role: Mapped[str] = mapped_column("USER_ROLE", String(20), nullable=False)
 
 
 class DeclarationNotice(Base):
+    # 对应 SQL: 1. 课题申报通知表
     __tablename__ = "DECLARATION_NOTICE"
 
     id: Mapped[int] = mapped_column("NOTICE_ID", Integer, primary_key=True, index=True)
@@ -49,11 +40,13 @@ class DeclarationNotice(Base):
 
 
 class ThesisTopic(Base):
+    # 对应 SQL: 2. 课题信息表
     __tablename__ = "THESIS_TOPIC"
 
     id: Mapped[int] = mapped_column("TOPIC_ID", Integer, primary_key=True, index=True)
     topic_name: Mapped[str] = mapped_column("TOPIC_NAME", String(200), nullable=False)
-    teacher_id: Mapped[int] = mapped_column("TEACHER_ID", Integer, nullable=False)
+    # 外键关联 SYS_USER
+    teacher_id: Mapped[int] = mapped_column("TEACHER_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False)
     topic_type: Mapped[str] = mapped_column("TOPIC_TYPE", String(20), nullable=False)
     content: Mapped[str | None] = mapped_column("CONTENT", Text, nullable=True)
     expected_result: Mapped[str | None] = mapped_column(
@@ -74,18 +67,17 @@ class ThesisTopic(Base):
     publish_status: Mapped[int] = mapped_column(
         "PUBLISH_STATUS", Integer, nullable=False, default=0, server_default="0"
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), nullable=False
-    )
+    # 已删除 created_at 字段，因为它不在你的 SQL 脚本中
 
 
 class TopicSelection(Base):
+    # 对应 SQL: 3. 选题记录表
     __tablename__ = "TOPIC_SELECTION"
 
     id: Mapped[int] = mapped_column("SELECT_ID", Integer, primary_key=True, index=True)
-    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, nullable=False, index=True)
+    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, ForeignKey("THESIS_TOPIC.TOPIC_ID"), nullable=False, index=True)
     student_id: Mapped[int] = mapped_column(
-        "STUDENT_ID", Integer, nullable=False, index=True
+        "STUDENT_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False, index=True
     )
     volunteer_order: Mapped[int] = mapped_column(
         "VOLUNTEER_ORDER", Integer, nullable=False, default=1, server_default="1"
@@ -98,31 +90,38 @@ class TopicSelection(Base):
     )
 
 
-class ArchiveDoc(Base):
-    __tablename__ = "ARCHIVE_DOC"
+class OpeningReport(Base):
+    # 对应 SQL: 4. 开题报告表
+    __tablename__ = "OPENING_REPORT"
 
-    id: Mapped[int] = mapped_column("DOC_ID", Integer, primary_key=True, index=True)
-    student_id: Mapped[int] = mapped_column("STUDENT_ID", Integer, nullable=False, index=True)
-    file_name: Mapped[str] = mapped_column("FILE_NAME", String(255), nullable=False)
-    file_type: Mapped[str] = mapped_column("FILE_TYPE", String(50), nullable=False)
-    file_path: Mapped[str] = mapped_column("FILE_PATH", String(500), nullable=False)
-    version: Mapped[str] = mapped_column(
-        "VERSION", String(10), nullable=False, default="v1.0", server_default="v1.0"
+    id: Mapped[int] = mapped_column("REPORT_ID", Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column(
+        "STUDENT_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False, unique=True, index=True
     )
-    upload_time: Mapped[datetime | None] = mapped_column(
-        "UPLOAD_TIME", DateTime, nullable=True, server_default=func.now()
+    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, ForeignKey("THESIS_TOPIC.TOPIC_ID"), nullable=False, index=True)
+    background: Mapped[str | None] = mapped_column("BACKGROUND", Text, nullable=True)
+    target: Mapped[str | None] = mapped_column("TARGET", String(1000), nullable=True)
+    method: Mapped[str | None] = mapped_column("METHOD", Text, nullable=True)
+    plan: Mapped[str | None] = mapped_column("PLAN", Text, nullable=True)
+    submit_time: Mapped[datetime | None] = mapped_column(
+        "SUBMIT_TIME", DateTime, nullable=True, server_default=func.now()
     )
-    audit_status: Mapped[str] = mapped_column(
-        "AUDIT_STATUS", String(20), nullable=False, default="待审核", server_default="待审核"
+    report_status: Mapped[str] = mapped_column(
+        "REPORT_STATUS", String(20), nullable=False, default="待审核", server_default="待审核"
     )
+    teacher_comment: Mapped[str | None] = mapped_column(
+        "TEACHER_COMMENT", String(500), nullable=True
+    )
+    audit_time: Mapped[datetime | None] = mapped_column("AUDIT_TIME", DateTime, nullable=True)
 
 
 class MidtermCheck(Base):
+    # 对应 SQL: 5. 中期检查表
     __tablename__ = "MIDTERM_CHECK"
 
     id: Mapped[int] = mapped_column("CHECK_ID", Integer, primary_key=True, index=True)
     student_id: Mapped[int] = mapped_column(
-        "STUDENT_ID", Integer, nullable=False, unique=True, index=True
+        "STUDENT_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False, unique=True, index=True
     )
     completed_content: Mapped[str | None] = mapped_column(
         "COMPLETED_CONTENT", Text, nullable=True
@@ -143,25 +142,42 @@ class MidtermCheck(Base):
     )
 
 
-class OpeningReport(Base):
-    __tablename__ = "OPENING_REPORT"
+class GraduationScore(Base):
+    # 对应 SQL: 6. 成绩信息表
+    __tablename__ = "GRADUATION_SCORE"
 
-    id: Mapped[int] = mapped_column("REPORT_ID", Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column("SCORE_ID", Integer, primary_key=True, index=True)
     student_id: Mapped[int] = mapped_column(
-        "STUDENT_ID", Integer, nullable=False, unique=True, index=True
+        "STUDENT_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False, unique=True, index=True
     )
-    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, nullable=False, index=True)
-    background: Mapped[str | None] = mapped_column("BACKGROUND", Text, nullable=True)
-    target: Mapped[str | None] = mapped_column("TARGET", String(1000), nullable=True)
-    method: Mapped[str | None] = mapped_column("METHOD", Text, nullable=True)
-    plan: Mapped[str | None] = mapped_column("PLAN", Text, nullable=True)
-    submit_time: Mapped[datetime | None] = mapped_column(
-        "SUBMIT_TIME", DateTime, nullable=True, server_default=func.now()
+    topic_id: Mapped[int] = mapped_column("TOPIC_ID", Integer, ForeignKey("THESIS_TOPIC.TOPIC_ID"), nullable=False, index=True)
+    process_score: Mapped[float | None] = mapped_column("PROCESS_SCORE", Numeric(5, 2))
+    opening_score: Mapped[float | None] = mapped_column("OPENING_SCORE", Numeric(5, 2))
+    midterm_score: Mapped[float | None] = mapped_column("MIDTERM_SCORE", Numeric(5, 2))
+    thesis_score: Mapped[float | None] = mapped_column("THESIS_SCORE", Numeric(5, 2))
+    defense_score: Mapped[float | None] = mapped_column("DEFENSE_SCORE", Numeric(5, 2))
+    total_score: Mapped[float | None] = mapped_column("TOTAL_SCORE", Numeric(5, 2))
+    score_level: Mapped[str | None] = mapped_column("SCORE_LEVEL", String(2))
+    is_published: Mapped[int] = mapped_column(
+        "IS_PUBLISHED", Integer, nullable=False, default=0, server_default="0"
     )
-    report_status: Mapped[str] = mapped_column(
-        "REPORT_STATUS", String(20), nullable=False, default="待审核", server_default="待审核"
+
+
+class ArchiveDoc(Base):
+    # 对应 SQL: 7. 资料归档表
+    __tablename__ = "ARCHIVE_DOC"
+
+    id: Mapped[int] = mapped_column("DOC_ID", Integer, primary_key=True, index=True)
+    student_id: Mapped[int] = mapped_column("STUDENT_ID", Integer, ForeignKey("SYS_USER.USER_ID"), nullable=False, index=True)
+    file_name: Mapped[str] = mapped_column("FILE_NAME", String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column("FILE_TYPE", String(50), nullable=False)
+    file_path: Mapped[str] = mapped_column("FILE_PATH", String(500), nullable=False)
+    version: Mapped[str] = mapped_column(
+        "VERSION", String(10), nullable=False, default="v1.0", server_default="v1.0"
     )
-    teacher_comment: Mapped[str | None] = mapped_column(
-        "TEACHER_COMMENT", String(500), nullable=True
+    upload_time: Mapped[datetime | None] = mapped_column(
+        "UPLOAD_TIME", DateTime, nullable=True, server_default=func.now()
     )
-    audit_time: Mapped[datetime | None] = mapped_column("AUDIT_TIME", DateTime, nullable=True)
+    audit_status: Mapped[str] = mapped_column(
+        "AUDIT_STATUS", String(20), nullable=False, default="待审核", server_default="待审核"
+    )

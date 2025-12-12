@@ -32,6 +32,15 @@ def calc_score_level(total: float) -> str:
     return "F"
 
 
+# --- SysUser ---
+class UserOut(BaseModel):
+    id: int
+    user_code: str
+    user_name: str
+    user_role: str
+    model_config = {"from_attributes": True}
+
+
 class ScoreBase(BaseModel):
     student_id: int = Field(...)
     topic_id: int = Field(...)
@@ -169,7 +178,23 @@ class TopicUpdate(BaseModel):
 
 class TopicOut(TopicBase):
     id: int
-    created_at: datetime
+    # 删除了 created_at，因为数据库表 THESIS_TOPIC 中没有这个字段
+    model_config = {"from_attributes": True}
+
+
+# 选题记录（TOPIC_SELECTION）
+class TopicSelectionBase(BaseModel):
+    topic_id: int
+    volunteer_order: int = Field(1, ge=1, le=3, description="志愿顺序1-3")
+
+class TopicSelectionCreate(TopicSelectionBase):
+    pass
+
+class TopicSelectionOut(TopicSelectionBase):
+    id: int
+    student_id: int
+    select_status: str
+    select_time: datetime
 
     model_config = {"from_attributes": True}
 
