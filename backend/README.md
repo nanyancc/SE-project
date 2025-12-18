@@ -22,18 +22,17 @@
    默认开放 CORS，前端可通过 `http://localhost:8000/api` 访问。
 
 ## 主要接口
-- `GET /health`：存活探针。
 - `GET /api/scores`：查询毕业成绩，支持 studentId/topicId/range/level/published 过滤，`limit/offset` 分页。
 - `GET /api/scores/stats`：同样的过滤条件下返回 count/avg/max/min/pass_rate/excellent_rate。
 - `POST /api/scores`：创建成绩记录（字段见下）。
 - `PUT /api/scores/{id}`：更新成绩，自动计算 `total_score` 与 `score_level`（A/B/C/D/F）。
 - `POST /api/scores/batch/status`：批量更新发布状态，`{ "ids": [1,2], "is_published": 1 }`。
 - 其他表的接口均在 `/api/extra/*`：
-  - `GET/POST/PUT /api/extra/notices`：课题申报通知（DECLARATION_NOTICE），支持草稿/发布/撤回。
-  - `GET/POST/PUT /api/extra/topics`：课题信息（THESIS_TOPIC）。
-  - `GET/POST/PUT /api/extra/archive-docs`：资料归档（ARCHIVE_DOC）。
-  - `GET/POST/PUT /api/extra/midterm-checks`：中期检查（MIDTERM_CHECK），按 student_id 查询/保存。
-  - `GET/POST/PUT /api/extra/opening-reports`：开题报告（OPENING_REPORT），按 student_id 查询/保存。
+- `GET/POST/PUT /api/extra/notices`：课题申报通知（DECLARATION_NOTICE），支持草稿/发布/撤回。
+- `GET/POST/PUT /api/extra/topics`：课题信息（THESIS_TOPIC）。
+- `GET/POST/PUT /api/extra/archive-docs`：资料归档（ARCHIVE_DOC）。
+- `GET/POST/PUT /api/extra/midterm-checks`：中期检查（MIDTERM_CHECK），按 student_id 查询/保存。
+- `GET/POST/PUT /api/extra/opening-reports`：开题报告（OPENING_REPORT），按 student_id 查询/保存。
 
 ## 测试用户映射
 - 配置项 `TEST_USER_ID`（`.env` 的 `TEST_USER_ID`，默认 1），所有涉及用户的写入都强制映射到该测试用户：课题 teacher_id、归档/中期/开题记录 student_id 等。
