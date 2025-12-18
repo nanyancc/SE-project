@@ -25,8 +25,8 @@ from .schemas import (
     TopicCreate,
     TopicOut,
     TopicUpdate,
-    TopicSelectionCreate, # 新增
-    TopicSelectionOut,    # 新增
+    TopicSelectionCreate,  # 新增
+    TopicSelectionOut,  # 新增
 )
 
 router = APIRouter(prefix="/extra", tags=["extra"])
@@ -111,13 +111,17 @@ async def list_topics(
     session: AsyncSession = Depends(get_session),
 ):
     items, total = await crud.list_topics(
-        session, keyword, topic_type, audit_status, publish_status, teacher_id, limit, offset
+        session,
+        keyword,
+        topic_type,
+        audit_status,
+        publish_status,
+        teacher_id,
+        limit,
+        offset,
     )
     return {
-        "items": [
-            TopicOut.model_validate(i)
-            for i in items
-        ],
+        "items": [TopicOut.model_validate(i) for i in items],
         "total": total,
     }
 
@@ -140,6 +144,16 @@ async def update_topic(
     return db_obj
 
 
+@router.delete("/topics/{topic_id}", status_code=204)
+async def delete_topic(topic_id: int, session: AsyncSession = Depends(get_session)):
+    # 调用 crud 执行删除，返回布尔值表示是否成功
+    success = await crud.delete_topic(session, topic_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    # 204 响应必须返回 None，不能返回任何数据
+    return
+
+
 # ---------- Selections (NEW) ----------
 @router.get("/selections", response_model=list[TopicSelectionOut])
 async def list_selections(
@@ -147,6 +161,7 @@ async def list_selections(
 ):
     items = await crud.list_my_selections(session)
     return items
+
 
 @router.post("/selections", response_model=TopicSelectionOut, status_code=201)
 async def create_selection(
@@ -185,9 +200,7 @@ async def update_archive_doc(
 
 # ---------- Midterm Check ----------
 @router.get("/midterm-checks/{student_id}", response_model=MidtermCheckOut)
-async def get_midterm(
-    student_id: int, session: AsyncSession = Depends(get_session)
-):
+async def get_midterm(student_id: int, session: AsyncSession = Depends(get_session)):
     db_obj = await crud.get_midterm_by_student(session, student_id)
     if not db_obj:
         raise HTTPException(status_code=404, detail="Record not found")
@@ -204,7 +217,9 @@ async def upsert_midterm(
 
 @router.put("/midterm-checks/{check_id}", response_model=MidtermCheckOut)
 async def update_midterm(
-    check_id: int, payload: MidtermCheckUpdate, session: AsyncSession = Depends(get_session)
+    check_id: int,
+    payload: MidtermCheckUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     db_obj = await crud.update_midterm(session, check_id, payload)
     if not db_obj:
@@ -234,7 +249,9 @@ async def create_opening_report(
 
 @router.put("/opening-reports/{report_id}", response_model=OpeningReportOut)
 async def update_opening_report(
-    report_id: int, payload: OpeningReportUpdate, session: AsyncSession = Depends(get_session)
+    report_id: int,
+    payload: OpeningReportUpdate,
+    session: AsyncSession = Depends(get_session),
 ):
     db_obj = await crud.update_opening_report(session, report_id, payload)
     if not db_obj:

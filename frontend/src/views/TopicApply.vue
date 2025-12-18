@@ -19,7 +19,7 @@
         <el-descriptions-item label="教师姓名">{{ teacherInfo.name }}</el-descriptions-item>
         <el-descriptions-item label="所属学院">{{ teacherInfo.college }}</el-descriptions-item>
         <el-descriptions-item label="职称">{{ teacherInfo.title }}</el-descriptions-item>
-        <el-descriptions-item label="课题总数">{{ teacherInfo.total }}/10</el-descriptions-item>
+        <el-descriptions-item label="课题总数">{{ teacherInfo.total }}</el-descriptions-item>
         <el-descriptions-item label="已审核">{{ teacherInfo.approved }} 个课题</el-descriptions-item>
       </el-descriptions>
     </el-card>

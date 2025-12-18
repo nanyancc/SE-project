@@ -16,8 +16,8 @@ from .models import (
     MidtermCheck,
     OpeningReport,
     ThesisTopic,
-    SysUser,        # 新增
-    TopicSelection, # 新增
+    SysUser,  # 新增
+    TopicSelection,  # 新增
 )
 from .schemas import (
     ArchiveDocCreate,
@@ -33,7 +33,7 @@ from .schemas import (
     StatsResponse,
     TopicCreate,
     TopicUpdate,
-    TopicSelectionCreate, # 新增
+    TopicSelectionCreate,  # 新增
     calc_score_level,
     calc_total_score,
 )
@@ -51,14 +51,14 @@ async def ensure_test_users(session: AsyncSession):
     stmt = select(SysUser).where(SysUser.id == TEST_USER_ID)
     result = await session.execute(stmt)
     user = result.scalars().first()
-    
+
     if not user:
         # 创建一个测试用户，身兼多职
         test_user = SysUser(
-            id=TEST_USER_ID, 
-            user_code="TEST001", 
-            user_name="测试用户(师生同体)", 
-            user_role="Student" # 简单起见，角色可以混用，或者你需要在业务层区分
+            id=TEST_USER_ID,
+            user_code="TEST001",
+            user_name="测试用户(师生同体)",
+            user_role="Student",  # 简单起见，角色可以混用，或者你需要在业务层区分
         )
         session.add(test_user)
         try:
@@ -146,7 +146,9 @@ async def list_scores(
         base_stmt = base_stmt.where(and_(*conditions))
     count_stmt = select(func.count()).select_from(base_stmt.subquery())
     total = (await session.execute(count_stmt)).scalar_one()
-    data_stmt = base_stmt.order_by(GraduationScore.id.desc()).limit(limit).offset(offset)
+    data_stmt = (
+        base_stmt.order_by(GraduationScore.id.desc()).limit(limit).offset(offset)
+    )
     result = await session.execute(data_stmt)
     return result.scalars().all(), total
 
@@ -402,9 +404,7 @@ async def list_topics(
         stmt = stmt.where(and_(*conditions))
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await session.execute(count_stmt)).scalar_one()
-    res = await session.execute(
-        stmt.limit(limit).offset(offset)
-    )
+    res = await session.execute(stmt.limit(limit).offset(offset))
     return res.scalars().all(), total
 
 
@@ -440,26 +440,34 @@ async def update_topic(
 
 # ---------- TOPIC_SELECTION (NEW) ----------
 async def list_my_selections(session: AsyncSession) -> list[TopicSelection]:
-    stmt = select(TopicSelection).where(TopicSelection.student_id == TEST_USER_ID).order_by(TopicSelection.volunteer_order)
+    stmt = (
+        select(TopicSelection)
+        .where(TopicSelection.student_id == TEST_USER_ID)
+        .order_by(TopicSelection.volunteer_order)
+    )
     result = await session.execute(stmt)
     return result.scalars().all()
 
 
-async def create_selection(session: AsyncSession, payload: TopicSelectionCreate) -> TopicSelection:
+async def create_selection(
+    session: AsyncSession, payload: TopicSelectionCreate
+) -> TopicSelection:
     # 检查是否重复选题 (同志愿位置)
     stmt = select(TopicSelection).where(
         TopicSelection.student_id == TEST_USER_ID,
-        TopicSelection.volunteer_order == payload.volunteer_order
+        TopicSelection.volunteer_order == payload.volunteer_order,
     )
     result = await session.execute(stmt)
     if result.scalars().first():
-        raise HTTPException(status_code=400, detail=f"志愿顺序 {payload.volunteer_order} 已存在")
+        raise HTTPException(
+            status_code=400, detail=f"志愿顺序 {payload.volunteer_order} 已存在"
+        )
 
     db_obj = TopicSelection(
         student_id=TEST_USER_ID,
         topic_id=payload.topic_id,
         volunteer_order=payload.volunteer_order,
-        select_status="待确认"
+        select_status="待确认",
     )
     session.add(db_obj)
     try:
@@ -535,9 +543,7 @@ async def upsert_midterm(
             await session.commit()
             await session.refresh(existing)
             return existing
-        db_obj = MidtermCheck(
-            **{**payload.model_dump(), "student_id": TEST_USER_ID}
-        )
+        db_obj = MidtermCheck(**{**payload.model_dump(), "student_id": TEST_USER_ID})
         session.add(db_obj)
         await session.commit()
         await session.refresh(db_obj)
@@ -602,3 +608,13 @@ async def update_opening_report(
     await session.commit()
     await session.refresh(db_obj)
     return db_obj
+
+
+# 添加到 crud.py 文件中
+async def delete_topic(session: AsyncSession, topic_id: int) -> bool:
+    db_obj = await session.get(ThesisTopic, topic_id)
+    if not db_obj:
+        return False
+    await session.delete(db_obj)
+    await session.commit()
+    return True
