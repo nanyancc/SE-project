@@ -94,7 +94,7 @@
                 <el-option label="通过" value="通过" />
                 <el-option label="整改" value="整改" />
               </el-select>
-            </el-form-item>
+            </el-form-item> 
             <el-form-item>
               <el-button type="primary" :loading="saving" @click="saveMidterm">
                 保存
