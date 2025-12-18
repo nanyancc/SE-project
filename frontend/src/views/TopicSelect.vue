@@ -15,28 +15,28 @@
     <el-card shadow="never" class="mb-16">
       <el-form inline>
         <el-form-item label="课题名称">
-          <el-input v-model="keyword" placeholder="输入课题名称关键词" />
+          <el-input v-model="keyword" placeholder="输入课题名称关键词" clearable @keyup.enter="fetchData" />
         </el-form-item>
         <el-form-item label="指导教师">
-          <el-input v-model="teacher" placeholder="输入教师姓名" />
+          <el-input v-model="teacher" placeholder="输入教师ID" clearable />
         </el-form-item>
         <el-form-item label="课题类型">
-          <el-select v-model="type" placeholder="全部">
+          <el-select v-model="type" placeholder="全部" clearable>
             <el-option label="全部" value="" />
-            <el-option label="研究型" value="研究型" />
-            <el-option label="应用型" value="应用型" />
-            <el-option label="设计类" value="设计类" />
+            <el-option label="研究型" value="研究" />
+            <el-option label="应用型" value="应用" />
+            <el-option label="设计类" value="设计" />
           </el-select>
         </el-form-item>
         <el-form-item label="课题状态">
-          <el-select v-model="status" placeholder="全部">
+          <el-select v-model="statusFilter" placeholder="全部">
             <el-option label="全部" value="" />
             <el-option label="可选题" value="可选题" />
             <el-option label="已选满" value="已选满" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary">搜索</el-button>
+          <el-button type="primary" @click="fetchData" :loading="loading">搜索</el-button>
           <el-button>选题统计</el-button>
           <el-button>导出报表</el-button>
           <el-button type="primary">发送通知</el-button>
@@ -53,7 +53,7 @@
         <el-tab-pane label="历史记录" name="history" />
       </el-tabs>
 
-      <el-table :data="filteredList" border style="margin-top: 10px">
+      <el-table :data="tableData" border style="margin-top: 10px" v-loading="loading">
         <el-table-column prop="name" label="课题名称" min-width="220" />
         <el-table-column prop="teacher" label="指导教师" width="140" />
         <el-table-column prop="type" label="课题类型" width="100" />
@@ -61,6 +61,7 @@
         <el-table-column prop="selectedCount" label="已选人数" width="90" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
+            <!-- 状态标签显示逻辑 -->
             <el-tag
               v-if="row.status === '可选题'"
               type="success"
@@ -73,7 +74,7 @@
               type="warning"
               size="small"
             >
-              名额已满
+              {{ row.status }}
             </el-tag>
           </template>
         </el-table-column>
@@ -88,78 +89,79 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
 
 const keyword = ref('')
 const teacher = ref('')
 const type = ref('')
-const status = ref('')
+const statusFilter = ref('') // 前端筛选“可选题/已选满”用
 const activeTab = ref('student')
+const loading = ref(false)
+const tableData = ref([])
 
-const topics = ref([
-  {
-    id: 1,
-    name: '基于深度学习的图像识别算法研究',
-    teacher: '张教授',
-    type: '研究型',
-    planCount: 3,
-    selectedCount: 2,
-    status: '可选题'
-  },
-  {
-    id: 2,
-    name: '智能图像检索系统的设计与实现',
-    teacher: '李教授',
-    type: '应用型',
-    planCount: 2,
-    selectedCount: 2,
-    status: '已选满'
-  },
-  {
-    id: 3,
-    name: '电子商务平台安全机制研究',
-    teacher: '王老师',
-    type: '应用型',
-    planCount: 2,
-    selectedCount: 1,
-    status: '可选题'
-  },
-  {
-    id: 4,
-    name: '移动端 UI 交互设计研究',
-    teacher: '刘老师',
-    type: '设计类',
-    planCount: 5,
-    selectedCount: 3,
-    status: '可选题'
-  },
-  {
-    id: 5,
-    name: '大数据分析平台搭建与应用',
-    teacher: '赵老师',
-    type: '应用型',
-    planCount: 4,
-    selectedCount: 4,
-    status: '已选满'
+const fetchData = async () => {
+  loading.value = true
+  try {
+    // 1. 构造请求参数
+    const params = {
+      keyword: keyword.value || undefined,
+      teacherId: teacher.value || undefined,
+      type: type.value || undefined,
+      publishStatus: '1', // 【核心修改】强制只向后端请求“审核通过”的数据
+      limit: 100
+    }
+
+    // 2. 发起请求
+    const res = await axios.get('http://127.0.0.1:8000/api/extra/topics', { params })
+
+    if (res.data && res.data.items) {
+      // 3. 数据处理与状态模拟
+      const rawItems = res.data.items.map(item => {
+        // 【随机模拟】因为后端还没做选课人数统计，这里随机生成一个“已选人数”
+        // 逻辑：生成一个 0 到 max_students 之间的随机数
+        const max = item.max_students
+        // 让“可选题”出现的概率大一点 (70%概率未满)
+        const isFull = Math.random() > 0.7 
+        const fakeSelected = isFull ? max : Math.floor(Math.random() * max)
+        
+        // 决定前端显示的状态文字
+        const displayStatus = (fakeSelected >= max) ? '已选满' : '可选题'
+
+        return {
+          id: item.id,
+          name: item.topic_name,
+          teacher: `教师ID: ${item.teacher_id}`,
+          type: item.topic_type,
+          planCount: max,
+          selectedCount: fakeSelected, // 使用模拟数据
+          status: displayStatus        // 映射后的状态
+        }
+      })
+
+      // 4. 前端二次过滤（处理页面上那个“课题状态”下拉框）
+      // 因为后端我们强制查了“审核通过”，页面上的下拉框现在用来筛选“可选题”还是“已选满”
+      if (statusFilter.value) {
+        tableData.value = rawItems.filter(item => item.status === statusFilter.value)
+      } else {
+        tableData.value = rawItems
+      }
+    }
+  } catch (error) {
+    console.error('API Error:', error)
+  } finally {
+    loading.value = false
   }
-])
+}
 
-const filteredList = computed(() =>
-  topics.value.filter(t => {
-    const k = keyword.value.trim()
-    const tea = teacher.value.trim()
-    return (
-      (!k || t.name.includes(k)) &&
-      (!tea || t.teacher.includes(tea)) &&
-      (!type.value || t.type === type.value) &&
-      (!status.value || t.status === status.value)
-    )
-  })
-)
+onMounted(() => {
+  fetchData()
+})
 </script>
 
 <style scoped>
 .mb-16 {
   margin-bottom: 16px;
 }
+/* 保持原有样式 */
 </style>
