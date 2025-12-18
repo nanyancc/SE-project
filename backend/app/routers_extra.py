@@ -25,6 +25,8 @@ from .schemas import (
     TopicCreate,
     TopicOut,
     TopicUpdate,
+    TopicSelectionCreate, # 新增
+    TopicSelectionOut,    # 新增
 )
 
 router = APIRouter(prefix="/extra", tags=["extra"])
@@ -136,6 +138,21 @@ async def update_topic(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Topic not found")
     return db_obj
+
+
+# ---------- Selections (NEW) ----------
+@router.get("/selections", response_model=list[TopicSelectionOut])
+async def list_selections(
+    session: AsyncSession = Depends(get_session),
+):
+    items = await crud.list_my_selections(session)
+    return items
+
+@router.post("/selections", response_model=TopicSelectionOut, status_code=201)
+async def create_selection(
+    payload: TopicSelectionCreate, session: AsyncSession = Depends(get_session)
+):
+    return await crud.create_selection(session, payload)
 
 
 # ---------- Archive Docs ----------

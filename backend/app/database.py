@@ -20,11 +20,16 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def init_models() -> None:
-    # Create tables on startup for development/demo usage.
+    # 1. 创建表结构
     from .models import Base
-
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # 2. 初始化种子数据 (防止外键报错)
+    # 延迟导入，防止循环引用
+    from .crud import ensure_test_users
+    async with SessionLocal() as session:
+        await ensure_test_users(session)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

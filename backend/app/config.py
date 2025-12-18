@@ -7,11 +7,11 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     app_name: str = "score-service"
     api_prefix: str = "/api"
-    db_host: str = "localhost"
+    db_host: str = "43.143.34.187"
     db_port: int = 3306
     db_user: str = "root"
-    db_password: str = "password"
-    db_name: str = "score_db"
+    db_password: str = "050614Xzz"
+    db_name: str = "ruanjian"
     db_echo: bool = False
     test_user_id: int = 1
 

@@ -16,6 +16,8 @@ from .models import (
     MidtermCheck,
     OpeningReport,
     ThesisTopic,
+    SysUser,        # 新增
+    TopicSelection, # 新增
 )
 from .schemas import (
     ArchiveDocCreate,
@@ -31,12 +33,40 @@ from .schemas import (
     StatsResponse,
     TopicCreate,
     TopicUpdate,
+    TopicSelectionCreate, # 新增
     calc_score_level,
     calc_total_score,
 )
 
 settings = get_settings()
 TEST_USER_ID = settings.test_user_id
+
+
+# --- 新增：初始化测试用户，防止外键报错 ---
+async def ensure_test_users(session: AsyncSession):
+    """
+    检查 SysUser 表中是否存在 ID=TEST_USER_ID 的用户。
+    如果不存在，则创建一个，用于开发测试。
+    """
+    stmt = select(SysUser).where(SysUser.id == TEST_USER_ID)
+    result = await session.execute(stmt)
+    user = result.scalars().first()
+    
+    if not user:
+        # 创建一个测试用户，身兼多职
+        test_user = SysUser(
+            id=TEST_USER_ID, 
+            user_code="TEST001", 
+            user_name="测试用户(师生同体)", 
+            user_role="Student" # 简单起见，角色可以混用，或者你需要在业务层区分
+        )
+        session.add(test_user)
+        try:
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            # 可能并发创建了，忽略
+            pass
 
 
 def _total_expr():
@@ -80,7 +110,6 @@ def _build_conditions(
 
 
 def _apply_total_and_level(data: dict) -> dict:
-    # Compute total_score and score_level whenever any sub-score changes.
     sub_scores = (
         "process_score",
         "opening_score",
@@ -126,9 +155,13 @@ async def create_score(session: AsyncSession, payload: ScoreCreate) -> Graduatio
     data = _apply_total_and_level(payload.model_dump())
     db_obj = GraduationScore(**data)
     session.add(db_obj)
-    await session.commit()
-    await session.refresh(db_obj)
-    return db_obj
+    try:
+        await session.commit()
+        await session.refresh(db_obj)
+        return db_obj
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="学生ID或课题ID不存在") from exc
 
 
 async def update_score(
@@ -380,9 +413,13 @@ async def create_topic(session: AsyncSession, payload: TopicCreate) -> ThesisTop
     data["teacher_id"] = TEST_USER_ID
     db_obj = ThesisTopic(**data)
     session.add(db_obj)
-    await session.commit()
-    await session.refresh(db_obj)
-    return db_obj
+    try:
+        await session.commit()
+        await session.refresh(db_obj)
+        return db_obj
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Teacher ID 不存在") from exc
 
 
 async def update_topic(
@@ -398,6 +435,39 @@ async def update_topic(
     db_obj.teacher_id = TEST_USER_ID
     await session.commit()
     await session.refresh(db_obj)
+    return db_obj
+
+
+# ---------- TOPIC_SELECTION (NEW) ----------
+async def list_my_selections(session: AsyncSession) -> list[TopicSelection]:
+    stmt = select(TopicSelection).where(TopicSelection.student_id == TEST_USER_ID).order_by(TopicSelection.volunteer_order)
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def create_selection(session: AsyncSession, payload: TopicSelectionCreate) -> TopicSelection:
+    # 检查是否重复选题 (同志愿位置)
+    stmt = select(TopicSelection).where(
+        TopicSelection.student_id == TEST_USER_ID,
+        TopicSelection.volunteer_order == payload.volunteer_order
+    )
+    result = await session.execute(stmt)
+    if result.scalars().first():
+        raise HTTPException(status_code=400, detail=f"志愿顺序 {payload.volunteer_order} 已存在")
+
+    db_obj = TopicSelection(
+        student_id=TEST_USER_ID,
+        topic_id=payload.topic_id,
+        volunteer_order=payload.volunteer_order,
+        select_status="待确认"
+    )
+    session.add(db_obj)
+    try:
+        await session.commit()
+        await session.refresh(db_obj)
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="所选课题ID不存在")
     return db_obj
 
 
@@ -419,9 +489,13 @@ async def create_archive_doc(
     data["student_id"] = TEST_USER_ID
     db_obj = ArchiveDoc(**data)
     session.add(db_obj)
-    await session.commit()
-    await session.refresh(db_obj)
-    return db_obj
+    try:
+        await session.commit()
+        await session.refresh(db_obj)
+        return db_obj
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="学生ID不存在") from exc
 
 
 async def update_archive_doc(
@@ -507,9 +581,13 @@ async def create_opening_report(
     data["student_id"] = TEST_USER_ID
     db_obj = OpeningReport(**data)
     session.add(db_obj)
-    await session.commit()
-    await session.refresh(db_obj)
-    return db_obj
+    try:
+        await session.commit()
+        await session.refresh(db_obj)
+        return db_obj
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="学生ID或课题ID不存在") from exc
 
 
 async def update_opening_report(
