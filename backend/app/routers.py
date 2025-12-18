@@ -15,7 +15,7 @@ from .schemas import (
 router = APIRouter(prefix="/scores", tags=["scores"])
 
 
-@router.get("/", response_model=PaginatedScores)
+@router.get("", response_model=PaginatedScores)
 async def list_scores(
     student_id: int | None = Query(None, alias="studentId"),
     topic_id: int | None = Query(None, alias="topicId"),
@@ -58,7 +58,7 @@ async def score_stats(
     )
 
 
-@router.post("/", response_model=ScoreOut, status_code=201)
+@router.post("", response_model=ScoreOut, status_code=201)
 async def create_score(
     payload: ScoreCreate, session: AsyncSession = Depends(get_session)
 ):

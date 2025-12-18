@@ -95,6 +95,14 @@ export const updateScore = async (id, payload) => {
   return toClient(data)
 }
 
+export const createScore = async payload => {
+  const data = await fetchJson(`${API_BASE}/scores`, {
+    method: 'POST',
+    body: JSON.stringify(toServer(payload))
+  })
+  return toClient(data)
+}
+
 export const batchUpdateStatus = async (ids, isPublished) => {
   return fetchJson(`${API_BASE}/scores/batch/status`, {
     method: 'POST',

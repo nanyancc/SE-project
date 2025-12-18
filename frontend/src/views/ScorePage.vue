@@ -112,7 +112,16 @@
                 </div>
               </div>
               <div class="table-actions">
-                <el-button size="small" @click="batchSetStatus(0)">
+                <el-button
+                  size="small"
+                  type="primary"
+                  @click="openCreateDialog"
+                >
+                  新增成绩
+                </el-button>
+                <el-button
+                  size="small"
+                  @click="batchSetStatus(0)">
                   批量暂存
                 </el-button>
                 <el-button
@@ -193,7 +202,7 @@
     <!-- 录入对话框 -->
     <el-dialog
       v-model="editVisible"
-      title="成绩录入 / 修改"
+      :title="isCreateMode ? '新增成绩' : '成绩录入 / 修改'"
       width="540px"
       destroy-on-close
     >
@@ -204,10 +213,20 @@
         size="small"
       >
         <el-form-item label="学生ID">
-          <el-input v-model="current.studentId" disabled />
+          <el-input
+            v-model="current.studentId"
+            :disabled="!isCreateMode"
+            type="number"
+            placeholder="请输入学生ID"
+          />
         </el-form-item>
         <el-form-item label="课题ID">
-          <el-input v-model="current.topicId" disabled />
+          <el-input
+            v-model="current.topicId"
+            :disabled="!isCreateMode"
+            type="number"
+            placeholder="请输入课题ID"
+          />
         </el-form-item>
         <el-form-item label="过程成绩">
           <el-input-number
@@ -256,6 +275,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   batchUpdateStatus,
+  createScore,
   getScoreStats,
   getScores,
   updateScore
@@ -281,6 +301,17 @@ const stats = ref({
   excellentRate: 0
 })
 
+const createEmptyScore = () => ({
+  studentId: '',
+  topicId: '',
+  processScore: null,
+  openingScore: null,
+  midtermScore: null,
+  thesisScore: null,
+  defenseScore: null,
+  isPublished: 0
+})
+
 // 计算总评（简单按权重：过程 20%、开题 10%、中期 10%、论文 30%、答辩 30%）
 const calcTotal = row => {
   const p = row.processScore ?? 0
@@ -299,6 +330,13 @@ const calcLevel = totalScore => {
   if (totalScore >= 70) return 'C'
   if (totalScore >= 60) return 'D'
   return 'F'
+}
+
+const normalizeId = value => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return null
+  const intNum = Math.trunc(num)
+  return intNum > 0 ? intNum : null
 }
 
 const csvColumns = [
@@ -433,26 +471,48 @@ const batchSetStatus = async isPublished => {
 // 录入对话框
 const editVisible = ref(false)
 const current = ref(null)
+const isCreateMode = ref(false)
+
+const openCreateDialog = () => {
+  current.value = createEmptyScore()
+  isCreateMode.value = true
+  editVisible.value = true
+}
 
 const openEditDialog = row => {
   current.value = { ...row }
+  isCreateMode.value = false
   editVisible.value = true
 }
 
 const saveCurrent = async isPublished => {
   if (!current.value) return
+  const studentId = normalizeId(current.value.studentId)
+  const topicId = normalizeId(current.value.topicId)
+  if (!studentId || !topicId) {
+    ElMessage.warning('请填写有效的学生ID和课题ID')
+    return
+  }
+  const payload = {
+    ...current.value,
+    studentId,
+    topicId,
+    isPublished
+  }
   try {
-    const updated = await updateScore(current.value.id, {
-      ...current.value,
-      isPublished
-    })
-    const idx = scores.value.findIndex(s => s.id === updated.id)
-    if (idx !== -1) {
-      scores.value[idx] = updated
+    if (isCreateMode.value) {
+      await createScore(payload)
+      await fetchScoresData()
+    } else {
+      const updated = await updateScore(current.value.id, payload)
+      const idx = scores.value.findIndex(s => s.id === updated.id)
+      if (idx !== -1) {
+        scores.value[idx] = updated
+      }
+      await fetchStats()
     }
     editVisible.value = false
     ElMessage.success(isPublished ? '成绩已发布' : '成绩已暂存')
-    await fetchStats()
   } catch (err) {
     console.error(err)
     ElMessage.error('保存失败，请重试')
