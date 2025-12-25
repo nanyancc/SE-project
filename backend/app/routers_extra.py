@@ -22,6 +22,7 @@ from .schemas import (
     OpeningReportCreate,
     OpeningReportOut,
     OpeningReportUpdate,
+    StudentMidtermOut,
     TopicCreate,
     TopicOut,
     TopicUpdate,
@@ -168,6 +169,16 @@ async def create_selection(
     payload: TopicSelectionCreate, session: AsyncSession = Depends(get_session)
 ):
     return await crud.create_selection(session, payload)
+
+
+# ---------- Students ----------
+@router.get("/students", response_model=list[StudentMidtermOut])
+async def list_students(
+    keyword: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+):
+    items = await crud.list_students(session, keyword)
+    return items
 
 
 # ---------- Archive Docs ----------

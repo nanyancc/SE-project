@@ -41,6 +41,18 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class StudentMidtermOut(BaseModel):
+    id: int
+    name: str
+    user_code: Optional[str] = None
+    user_role: Optional[str] = None
+    topic_id: Optional[int] = None
+    topic_name: Optional[str] = None
+    status: str = "未提交"
+
+    model_config = {"extra": "ignore"}
+
+
 class ScoreBase(BaseModel):
     student_id: int = Field(...)
     topic_id: int = Field(...)

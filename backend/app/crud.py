@@ -438,6 +438,69 @@ async def update_topic(
     return db_obj
 
 
+# ---------- STUDENTS ----------
+async def list_students(
+    session: AsyncSession, keyword: Optional[str]
+) -> list[dict]:
+    selection_subq = (
+        select(
+            TopicSelection.student_id.label("student_id"),
+            TopicSelection.topic_id.label("topic_id"),
+        )
+        .where(TopicSelection.volunteer_order == 1)
+        .subquery()
+    )
+    topic_id_expr = func.coalesce(OpeningReport.topic_id, selection_subq.c.topic_id)
+
+    stmt = (
+        select(
+            SysUser.id.label("id"),
+            SysUser.user_code.label("user_code"),
+            SysUser.user_name.label("user_name"),
+            SysUser.user_role.label("user_role"),
+            topic_id_expr.label("topic_id"),
+            ThesisTopic.topic_name.label("topic_name"),
+            MidtermCheck.id.label("midterm_id"),
+            MidtermCheck.check_result.label("check_result"),
+        )
+        .select_from(SysUser)
+        .outerjoin(OpeningReport, OpeningReport.student_id == SysUser.id)
+        .outerjoin(selection_subq, selection_subq.c.student_id == SysUser.id)
+        .outerjoin(ThesisTopic, ThesisTopic.id == topic_id_expr)
+        .outerjoin(MidtermCheck, MidtermCheck.student_id == SysUser.id)
+        .where(SysUser.user_role.in_(["Student", "学生", "STUDENT"]))
+        .order_by(SysUser.id.asc())
+    )
+    if keyword:
+        like = f"%{keyword}%"
+        stmt = stmt.where(
+            or_(
+                SysUser.user_name.like(like),
+                SysUser.user_code.like(like),
+            )
+        )
+
+    res = await session.execute(stmt)
+    items = []
+    for row in res.all():
+        status = "未提交"
+        if row.midterm_id is not None:
+            status = row.check_result or "已提交"
+        display_name = row.user_name or row.user_code or str(row.id)
+        items.append(
+            {
+                "id": row.id,
+                "name": display_name,
+                "user_code": row.user_code,
+                "user_role": row.user_role,
+                "topic_id": row.topic_id,
+                "topic_name": row.topic_name,
+                "status": status,
+            }
+        )
+    return items
+
+
 # ---------- TOPIC_SELECTION (NEW) ----------
 async def list_my_selections(session: AsyncSession) -> list[TopicSelection]:
     stmt = (
