@@ -638,7 +638,7 @@ async def update_midterm(
 async def get_opening_by_student(
     session: AsyncSession, student_id: int
 ) -> Optional[OpeningReport]:
-    stmt = select(OpeningReport).where(OpeningReport.student_id == TEST_USER_ID)
+    stmt = select(OpeningReport).where(OpeningReport.student_id == student_id)
     res = await session.execute(stmt)
     return res.scalars().first()
 
@@ -647,8 +647,13 @@ async def create_opening_report(
     session: AsyncSession, payload: OpeningReportCreate
 ) -> OpeningReport:
     data = payload.model_dump()
-    data["student_id"] = TEST_USER_ID
+
+    # ❌ 必须删除下面这一行！否则无论谁提交，都变成测试用户(ID=1)的报告
+    # data["student_id"] = TEST_USER_ID
+
+    # ✅ 正确：直接使用 payload 里包含的 student_id
     db_obj = OpeningReport(**data)
+
     session.add(db_obj)
     try:
         await session.commit()
@@ -656,7 +661,10 @@ async def create_opening_report(
         return db_obj
     except IntegrityError as exc:
         await session.rollback()
-        raise HTTPException(status_code=400, detail="学生ID或课题ID不存在") from exc
+        # 这里的提示也顺便改得更准确一点
+        raise HTTPException(
+            status_code=400, detail="提交失败：该学生可能已存在开题报告，或课题ID无效"
+        ) from exc
 
 
 async def update_opening_report(
@@ -665,9 +673,14 @@ async def update_opening_report(
     db_obj = await session.get(OpeningReport, report_id)
     if not db_obj:
         return None
+
+    # 自动更新 payload 里传来的字段
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(db_obj, field, value)
-    db_obj.student_id = TEST_USER_ID
+
+    # ❌ 必须删除下面这一行！否则更新报告时，会将归属人强行改为 ID=1
+    # db_obj.student_id = TEST_USER_ID
+
     await session.commit()
     await session.refresh(db_obj)
     return db_obj
