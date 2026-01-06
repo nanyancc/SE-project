@@ -347,7 +347,7 @@ async def update_notice(
     elif payload.status == "已撤回":
         db_obj.is_deleted = 1
     else:
-        db_obj.publish_time = None
+        # 草稿状态：保持 publish_time 不变（数据库不允许 NULL）
         db_obj.is_deleted = 0
     await session.commit()
     await session.refresh(db_obj)
@@ -439,9 +439,7 @@ async def update_topic(
 
 
 # ---------- STUDENTS ----------
-async def list_students(
-    session: AsyncSession, keyword: Optional[str]
-) -> list[dict]:
+async def list_students(session: AsyncSession, keyword: Optional[str]) -> list[dict]:
     selection_subq = (
         select(
             TopicSelection.student_id.label("student_id"),

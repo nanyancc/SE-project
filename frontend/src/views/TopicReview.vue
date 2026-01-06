@@ -62,48 +62,63 @@
 </template>
 
 <script setup>
-const groups = [
-  {
-    id: 1,
-    name: '计算机科学审批一组',
-    major: '计算机科学',
-    leader: '李教授',
-    memberCount: 5,
-    pendingTopics: 12,
-    progress: 75,
-    status: '活跃'
-  },
-  {
-    id: 2,
-    name: '人工智能审批组',
-    major: '人工智能',
-    leader: '王教授',
-    memberCount: 4,
-    pendingTopics: 8,
-    progress: 60,
-    status: '活跃'
-  },
-  {
-    id: 3,
-    name: '数据科学审批组',
-    major: '数据科学',
-    leader: '张教授',
-    memberCount: 6,
-    pendingTopics: 5,
-    progress: 85,
-    status: '活跃'
-  },
-  {
-    id: 4,
-    name: '网络安全审批组',
-    major: '网络安全',
-    leader: '刘明',
-    memberCount: 3,
-    pendingTopics: 0,
-    progress: 100,
-    status: '已完成'
+import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { listTopics } from '../api/topics'
+
+const loading = ref(false)
+const groups = ref([])
+
+// 从后端获取课题数据并按专业方向分组统计
+const fetchGroups = async () => {
+  loading.value = true
+  try {
+    // 获取全部课题
+    const { items } = await listTopics({ limit: 200 })
+    
+    // 按专业方向分组统计
+    const groupMap = {}
+    items.forEach(topic => {
+      const major = topic.majorLimit || '未指定专业'
+      if (!groupMap[major]) {
+        groupMap[major] = {
+          id: Object.keys(groupMap).length + 1,
+          name: `${major}审批组`,
+          major,
+          leader: '待分配',
+          memberCount: 1,
+          total: 0,
+          pending: 0,
+          approved: 0
+        }
+      }
+      groupMap[major].total++
+      if (topic.auditStatus === '待审核') {
+        groupMap[major].pending++
+      } else if (topic.auditStatus === '审核通过') {
+        groupMap[major].approved++
+      }
+    })
+    
+    // 转换为数组并计算进度
+    groups.value = Object.values(groupMap).map(g => ({
+      ...g,
+      pendingTopics: g.pending,
+      // 完成度 = 已处理数量 / 总数量
+      progress: g.total > 0 ? Math.round(((g.total - g.pending) / g.total) * 100) : 0,
+      status: g.pending > 0 ? '活跃' : '已完成'
+    }))
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('获取数据失败')
+  } finally {
+    loading.value = false
   }
-]
+}
+
+onMounted(() => {
+  fetchGroups()
+})
 </script>
 
 <style scoped>

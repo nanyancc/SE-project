@@ -37,6 +37,16 @@ const toClient = data => ({
   publishTime: data.publish_time || data.publishTime
 })
 
+// 补全时间格式：YYYY-MM-DD HH:mm -> YYYY-MM-DD HH:mm:ss
+const normalizeTime = t => {
+  if (!t) return t
+  // 如果已经有秒数则不处理
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(t)) return t
+  // YYYY-MM-DD HH:mm 补上 :00
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(t)) return t + ':00'
+  return t
+}
+
 const toServer = payload => ({
   title: payload.title,
   type: payload.type,
@@ -44,8 +54,8 @@ const toServer = payload => ({
   teacher_scope: payload.teacherScope || '',
   requirement: payload.requirement || '',
   auto_remind: payload.autoRemind ?? true,
-  start_time: payload.startTime,
-  end_time: payload.endTime,
+  start_time: normalizeTime(payload.startTime),
+  end_time: normalizeTime(payload.endTime),
   status: payload.status || '草稿',
   publisher: payload.publisher || '教科办'
 })
