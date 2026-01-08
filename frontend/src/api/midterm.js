@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const fetchJson = async (url, options) => {
   const res = await fetch(url, {
@@ -10,6 +10,20 @@ const fetchJson = async (url, options) => {
     throw new Error(text || '请求失败')
   }
   return res.json()
+}
+
+// 获取学生列表（用于中期检查）
+export const getStudents = async (keyword = '') => {
+  const params = keyword ? `?keyword=${encodeURIComponent(keyword)}` : ''
+  const data = await fetchJson(`${API_BASE}/extra/students${params}`)
+  return data.map(item => ({
+    id: item.id,
+    name: item.name,
+    userCode: item.user_code,
+    topicId: item.topic_id,
+    topicName: item.topic_name,
+    status: item.status
+  }))
 }
 
 const toClient = data => ({

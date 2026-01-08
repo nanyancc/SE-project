@@ -113,7 +113,8 @@ const fetchData = async () => {
     }
 
     // 2. 发起请求
-    const res = await axios.get('http://127.0.0.1:8000/api/extra/topics', { params })
+    const apiBase = import.meta.env.VITE_API_BASE || '/api'
+    const res = await axios.get(`${apiBase}/extra/topics`, { params })
 
     if (res.data && res.data.items) {
       // 3. 数据处理与状态模拟

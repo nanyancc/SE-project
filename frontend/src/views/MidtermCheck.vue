@@ -6,7 +6,7 @@
           <div class="weather-icon">🕒</div>
           <div>
             <div class="banner-title">中期检查</div>
-            <div class="banner-sub">选择学生并上传中期检查表</div>
+            <div class="banner-sub">选择学生并填写中期检查信息</div>
           </div>
         </div>
       </div>
@@ -16,15 +16,37 @@
       <el-col :span="16">
         <el-card shadow="never" class="mb-16">
           <template #header>
-            <span>选择学生</span>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span>选择学生</span>
+              <el-input
+                v-model="searchKeyword"
+                placeholder="搜索学生姓名/学号"
+                style="width: 200px"
+                clearable
+                @keyup.enter="loadStudents"
+                @clear="loadStudents"
+              >
+                <template #suffix>
+                  <el-icon style="cursor: pointer" @click="loadStudents"><Search /></el-icon>
+                </template>
+              </el-input>
+            </div>
           </template>
 
-          <el-table :data="students" border>
+          <el-table :data="students" border v-loading="loadingStudents">
             <el-table-column type="index" label="序号" width="60" />
             <el-table-column prop="name" label="姓名" width="100" />
-            <el-table-column prop="id" label="学号" width="120" />
-            <el-table-column prop="topicName" label="课题名称" />
-            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="userCode" label="学号" width="120" />
+            <el-table-column prop="topicName" label="课题名称">
+              <template #default="{ row }">
+                {{ row.topicName || '未选题' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getStatusType(row.status)">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column label="操作" width="100">
               <template #default="{ row }">
                 <el-button type="primary" link @click="selectStudent(row)">
@@ -35,7 +57,7 @@
           </el-table>
 
           <div class="text-muted" style="margin-top: 8px">
-            当前第 1 页，共 3 页（静态示例）
+            共 {{ students.length }} 条记录
           </div>
         </el-card>
 
@@ -119,13 +141,14 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMidterm, upsertMidterm } from '../api/midterm'
+import { Search } from '@element-plus/icons-vue'
+import { getMidterm, upsertMidterm, getStudents } from '../api/midterm'
 
-const students = ref([
-  { id: '1', name: '测试学生', topicName: '课题 1', status: '已提交' }
-])
+const students = ref([])
+const loadingStudents = ref(false)
+const searchKeyword = ref('')
 
 const currentStudent = ref(null)
 const saving = ref(false)
@@ -187,6 +210,8 @@ const saveMidterm = async () => {
     const res = await upsertMidterm(payload)
     form.id = res.id
     ElMessage.success('保存成功')
+    // 保存成功后刷新学生列表，更新状态
+    await loadStudents()
   } catch (err) {
     console.error(err)
     ElMessage.error('保存失败，请重试')
@@ -194,6 +219,39 @@ const saveMidterm = async () => {
     saving.value = false
   }
 }
+
+// 获取状态对应的标签类型
+const getStatusType = (status) => {
+  switch (status) {
+    case '通过':
+      return 'success'
+    case '整改':
+      return 'warning'
+    case '已提交':
+      return 'info'
+    case '未提交':
+    default:
+      return 'danger'
+  }
+}
+
+// 加载学生列表
+const loadStudents = async () => {
+  loadingStudents.value = true
+  try {
+    students.value = await getStudents(searchKeyword.value)
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('加载学生列表失败')
+  } finally {
+    loadingStudents.value = false
+  }
+}
+
+// 组件挂载时加载数据
+onMounted(() => {
+  loadStudents()
+})
 </script>
 
 <style scoped>

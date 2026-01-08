@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const calcTotal = data =>
   (data.processScore ?? 0) * 0.2 +

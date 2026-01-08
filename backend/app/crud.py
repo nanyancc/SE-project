@@ -586,7 +586,8 @@ async def update_archive_doc(
 async def get_midterm_by_student(
     session: AsyncSession, student_id: int
 ) -> Optional[MidtermCheck]:
-    stmt = select(MidtermCheck).where(MidtermCheck.student_id == TEST_USER_ID)
+    # 使用传入的 student_id 查询，而不是 TEST_USER_ID
+    stmt = select(MidtermCheck).where(MidtermCheck.student_id == student_id)
     res = await session.execute(stmt)
     return res.scalars().first()
 
@@ -595,16 +596,19 @@ async def upsert_midterm(
     session: AsyncSession, payload: MidtermCheckCreate
 ) -> MidtermCheck:
     try:
-        existing = await get_midterm_by_student(session, TEST_USER_ID)
+        # 使用 payload 中的 student_id
+        actual_student_id = payload.student_id
+        existing = await get_midterm_by_student(session, actual_student_id)
         if existing:
             for field, value in payload.model_dump(exclude_unset=True).items():
-                setattr(existing, field, value)
-            existing.student_id = TEST_USER_ID
+                if field != "student_id":  # 不更新 student_id
+                    setattr(existing, field, value)
             session.add(existing)
             await session.commit()
             await session.refresh(existing)
             return existing
-        db_obj = MidtermCheck(**{**payload.model_dump(), "student_id": TEST_USER_ID})
+        # 直接使用 payload 中的数据创建，包括正确的 student_id
+        db_obj = MidtermCheck(**payload.model_dump())
         session.add(db_obj)
         await session.commit()
         await session.refresh(db_obj)
@@ -626,7 +630,7 @@ async def update_midterm(
         return None
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(db_obj, field, value)
-    db_obj.student_id = TEST_USER_ID
+    # 不再强制覆盖 student_id
     await session.commit()
     await session.refresh(db_obj)
     return db_obj
